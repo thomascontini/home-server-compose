@@ -1,0 +1,102 @@
+volumes:
+  database:
+    driver: local
+  originals:
+    driver: local
+  storage:
+    driver: local
+
+networks:
+  traefik_proxy:
+    name: traefik_proxy
+    external: true
+
+# Photoprism instance
+services:
+  photoprism2:
+    image: photoprism/photoprism:latest
+    # restart: unless-stopped
+    stop_grace_period: 10s
+    depends_on:
+      - mariadb
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    ports:
+      - "2342:2342"
+    ## https://docs.photoprism.app/getting-started/config-options/
+    environment:
+      PHOTOPRISM_ADMIN_USER: $PHOTOPRISM_ADMIN_USER
+      PHOTOPRISM_ADMIN_PASSWORD: $PHOTOPRISM_ADMIN_PASSWORD
+      PHOTOPRISM_AUTH_MODE: "password"
+      PHOTOPRISM_SITE_URL: $PHOTOPRISM_SITE_URL
+      # PHOTOPRISM_DISABLE_TLS: "false"
+      # PHOTOPRISM_DEFAULT_TLS: "true"
+      PHOTOPRISM_ORIGINALS_LIMIT: 5000
+      PHOTOPRISM_HTTP_COMPRESSION: "gzip"
+      PHOTOPRISM_LOG_LEVEL: "info"
+      PHOTOPRISM_READONLY: "false"
+      PHOTOPRISM_EXPERIMENTAL: "false"
+      PHOTOPRISM_RAW_PRESETS: "false"
+      PHOTOPRISM_SIDECAR_YAML: "true"
+      PHOTOPRISM_BACKUP_ALBUMS: "true"
+      PHOTOPRISM_BACKUP_DATABASE: "true"
+      PHOTOPRISM_BACKUP_SCHEDULE: "daily"
+      PHOTOPRISM_INDEX_SCHEDULE: ""
+      PHOTOPRISM_DATABASE_DRIVER: "mysql"
+      PHOTOPRISM_DATABASE_SERVER: "mariadb:3306"
+      PHOTOPRISM_DATABASE_NAME: "photoprism"
+      PHOTOPRISM_DATABASE_USER: $MARIADB_USER
+      PHOTOPRISM_DATABASE_PASSWORD: $MARIADB_PASSWORD
+      PHOTOPRISM_SITE_CAPTION: "AI-Powered Photos App"
+      PHOTOPRISM_SITE_DESCRIPTION: ""
+      PHOTOPRISM_SITE_AUTHOR: ""
+    working_dir: "/photoprism" # do not change or remove
+    volumes:
+      - "originals:/photoprism/originals"  # Original media files (DO NOT REMOVE)
+      - "storage:/photoprism/storage"      # *Writable* storage folder for cache, database, and sidecar files (DO NOT REMOVE)
+      # - "/mnt/raid/photoprism_import:/photoprism/import"
+    networks:
+      - traefik_proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.photoprism-ui2.loadbalancer.server.port=2342
+      - traefik.http.routers.photoprism2.entrypoints=web, websecure
+      - traefik.http.routers.photoprism2.rule=Host(`$PROXY_EXT_HOST`)
+      - traefik.http.routers.photoprism2.tls=true
+      - traefik.http.routers.photoprism2.tls.certresolver=myresolver
+      - traefik.http.routers.photoprism2.service=photoprism-ui2
+
+  ## MariaDB Database Server
+  mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    stop_grace_period: 5s
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    command: --innodb-buffer-pool-size=512M --transaction-isolation=READ-COMMITTED --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max-connections=512 --innodb-rollback-on-timeout=OFF --innodb-lock-wait-timeout=120
+    volumes:
+      - "database:/var/lib/mysql"
+    environment:
+      MARIADB_AUTO_UPGRADE: "1"
+      MARIADB_INITDB_SKIP_TZINFO: "1"
+      MARIADB_DATABASE: "photoprism"
+      MARIADB_USER: $MARIADB_USER
+      MARIADB_PASSWORD: $MARIADB_PASSWORD
+      MARIADB_ROOT_PASSWORD: $MARIADB_ROOT_PASSWORD
+    networks:
+      - traefik_proxy
+  
+  ## Watchtower upgrades services automatically
+  watchtower:
+    restart: unless-stopped
+    image: containrrr/watchtower
+    profiles: ["update"]
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: 7200
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - traefik_proxy
