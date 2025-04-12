@@ -18,7 +18,7 @@ services:
     # restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
-      - mariadb
+      - mariadb2
     security_opt:
       - seccomp:unconfined
       - apparmor:unconfined
