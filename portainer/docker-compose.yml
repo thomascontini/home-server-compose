@@ -1,0 +1,29 @@
+volumes:
+  data:
+    driver: local
+
+networks:
+  traefik_proxy:
+    name: traefik_proxy
+    driver: bridge
+
+services:
+  portainer:
+    image: 'portainer/portainer-ce:latest'
+    restart: unless-stopped
+    # ports:
+      # - '9000:9000' # for debug only
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.portainer.entrypoints=web, websecure
+      - traefik.http.routers.portainer.rule=Host(`$PROXY_LAN_HOST`)
+      - traefik.http.routers.portainer.tls=true
+      - traefik.http.routers.portainer.tls.certresolver=myresolver
+      - traefik.http.services.portainer-ui.loadbalancer.server.port=9000
+      - traefik.http.routers.portainer.service=portainer-ui
+      - traefik.http.routers.portainer.middlewares=authelia@docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/data
+    networks:
+      - traefik_proxy

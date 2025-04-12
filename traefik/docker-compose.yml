@@ -1,0 +1,58 @@
+networks:
+  traefik_proxy:
+    name: traefik_proxy
+    external: true
+
+services:
+  traefik:
+    image: "traefik:v2.5"
+    container_name: "traefik"
+    depends_on:
+      - authelia
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      # - "8080:8080"  # Dashboard
+    environment:
+      - CF_API_EMAIL=$CF_API_EMAIL
+      - CF_API_KEY=$CF_API_KEY
+    volumes:
+      - /etc/traefik:/etc/traefik
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik_proxy
+    labels:
+      - traefik.enable=true
+      - 'traefik.http.middlewares.authelia.forwardAuth.address=http://authelia:9091/api/verify?rd=https%3A%2F%2F$AUTHELIA_PROXY_EXT_HOST%2F'
+      - 'traefik.http.middlewares.authelia.forwardAuth.trustForwardHeader=true'
+      - 'traefik.http.middlewares.authelia.forwardAuth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email'
+      - 'traefik.http.middlewares.authelia-basic.forwardAuth.address=http://authelia:9091/api/verify?auth=basic'
+      - 'traefik.http.middlewares.authelia-basic.forwardAuth.trustForwardHeader=true'
+      - 'traefik.http.middlewares.authelia-basic.forwardAuth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email'
+      - traefik.http.routers.traefik.entrypoints=web, websecure
+      - traefik.http.routers.traefik.rule=Host(`$TRAEFIK_PROXY_LAN_HOST`)
+      - traefik.http.routers.traefik.tls=true
+      - traefik.http.routers.traefik.tls.certresolver=myresolver
+      - traefik.http.services.traefik-ui.loadbalancer.server.port=8080
+      - traefik.http.routers.traefik.service=traefik-ui
+      - traefik.http.routers.traefik.middlewares=authelia@docker
+
+  authelia:
+    container_name: authelia
+    image: authelia/authelia
+    restart: unless-stopped
+    networks:
+      - traefik_proxy
+    expose:
+      - 9091
+    volumes:
+      - /etc/authelia/config:/config
+    environment:
+      TZ: "Europe/Paris"
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.authelia.rule=Host(`$AUTHELIA_PROXY_EXT_HOST`)'
+      - 'traefik.http.routers.authelia.entryPoints=web, websecure'
+      - 'traefik.http.routers.authelia.tls=true'
+      - 'traefik.http.routers.authelia.tls.certresolver=myresolver'
