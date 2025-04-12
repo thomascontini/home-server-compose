@@ -44,7 +44,7 @@ services:
       PHOTOPRISM_BACKUP_SCHEDULE: "daily"
       PHOTOPRISM_INDEX_SCHEDULE: ""
       PHOTOPRISM_DATABASE_DRIVER: "mysql"
-      PHOTOPRISM_DATABASE_SERVER: "mariadb:3306"
+      PHOTOPRISM_DATABASE_SERVER: "mariadb2:3306"
       PHOTOPRISM_DATABASE_NAME: "photoprism"
       PHOTOPRISM_DATABASE_USER: $MARIADB_USER
       PHOTOPRISM_DATABASE_PASSWORD: $MARIADB_PASSWORD
@@ -68,7 +68,7 @@ services:
       - traefik.http.routers.photoprism2.service=photoprism-ui2
 
   ## MariaDB Database Server
-  mariadb:
+  mariadb2:
     image: mariadb:11
     restart: unless-stopped
     stop_grace_period: 5s
